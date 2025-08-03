@@ -1,8 +1,5 @@
-// Server/resolvers.js
+// Server/resolvers-simple.js (use this temporarily if you want to test without subscriptions)
 const { v4: uuidv4 } = require('uuid');
-const { PubSub } = require('graphql-subscriptions');
-
-const pubsub = new PubSub();
 
 // Medical reference ranges
 const VITAL_RANGES = {
@@ -15,8 +12,26 @@ const VITAL_RANGES = {
   GLUCOSE_LEVEL: { min: 70, max: 140, criticalMin: 54, criticalMax: 240, unit: 'mg/dL' }
 };
 
-// In-memory storage (replace with database in production)
-let vitals = [];
+// In-memory storage
+let vitals = [
+  {
+    id: '1',
+    type: 'HEART_RATE',
+    value: 72,
+    unit: 'bpm',
+    status: 'NORMAL',
+    timestamp: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    type: 'TEMPERATURE',
+    value: 36.5,
+    unit: '°C',
+    status: 'NORMAL',
+    timestamp: new Date().toISOString(),
+  },
+];
+
 let alerts = [];
 
 // Helper functions
@@ -54,27 +69,9 @@ function createAlert(vitalReading) {
       acknowledged: false
     };
     alerts.push(alert);
-    pubsub.publish('ALERT_CREATED', { alertCreated: alert });
     return alert;
   }
   return null;
-}
-
-function calculateTrend(dataPoints) {
-  if (dataPoints.length < 2) return 'STABLE';
-  
-  const recent = dataPoints.slice(-10); // Last 10 readings
-  const firstHalf = recent.slice(0, Math.floor(recent.length / 2));
-  const secondHalf = recent.slice(Math.floor(recent.length / 2));
-  
-  const avgFirst = firstHalf.reduce((sum, dp) => sum + dp.value, 0) / firstHalf.length;
-  const avgSecond = secondHalf.reduce((sum, dp) => sum + dp.value, 0) / secondHalf.length;
-  
-  const percentChange = ((avgSecond - avgFirst) / avgFirst) * 100;
-  
-  if (percentChange > 5) return 'INCREASING';
-  if (percentChange < -5) return 'DECREASING';
-  return 'STABLE';
 }
 
 const resolvers = {
@@ -83,37 +80,8 @@ const resolvers = {
       let filtered = vitals;
       if (type) filtered = filtered.filter(v => v.type === type);
       if (patientId) filtered = filtered.filter(v => v.patientId === patientId);
-      return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    },
-    
-    getVitalTrends: (_, { type, timeRange, patientId }) => {
-      const start = new Date(timeRange.start);
-      const end = new Date(timeRange.end);
-      
-      let filtered = vitals.filter(v => 
-        v.type === type &&
-        new Date(v.timestamp) >= start &&
-        new Date(v.timestamp) <= end
-      );
-      
-      if (patientId) filtered = filtered.filter(v => v.patientId === patientId);
-      
-      if (filtered.length === 0) return null;
-      
-      const values = filtered.map(v => v.value);
-      const dataPoints = filtered.map(v => ({
-        timestamp: v.timestamp,
-        value: v.value
-      }));
-      
-      return {
-        type,
-        average: values.reduce((a, b) => a + b, 0) / values.length,
-        min: Math.min(...values),
-        max: Math.max(...values),
-        trend: calculateTrend(dataPoints),
-        dataPoints
-      };
+      console.log("Sending vitals:", filtered);
+      return filtered;
     },
     
     getAlerts: (_, { patientId }) => {
@@ -143,9 +111,6 @@ const resolvers = {
         createAlert(newVital);
       }
       
-      // Publish to subscribers
-      pubsub.publish('VITAL_ADDED', { vitalAdded: newVital });
-      
       return newVital;
     },
     
@@ -163,30 +128,6 @@ const resolvers = {
       alert.acknowledged = true;
       alert.acknowledgedAt = new Date().toISOString();
       return alert;
-    }
-  },
-  
-  Subscription: {
-    vitalAdded: {
-      subscribe: (_, { patientId }) => {
-        if (patientId) {
-          return pubsub.asyncIterator(['VITAL_ADDED']).filter(
-            payload => payload.vitalAdded.patientId === patientId
-          );
-        }
-        return pubsub.asyncIterator(['VITAL_ADDED']);
-      }
-    },
-    
-    alertCreated: {
-      subscribe: (_, { patientId }) => {
-        if (patientId) {
-          return pubsub.asyncIterator(['ALERT_CREATED']).filter(
-            payload => payload.alertCreated.vitalReading.patientId === patientId
-          );
-        }
-        return pubsub.asyncIterator(['ALERT_CREATED']);
-      }
     }
   }
 };
