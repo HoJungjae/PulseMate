@@ -23,6 +23,8 @@ PulseMate is a production-ready mobile health monitoring system that demonstrate
 - 💨 Oxygen Saturation (SpO2)
 - 🫁 Respiratory Rate
 - 🩸 Glucose Level
+<img width="1332" height="1912" alt="image" src="https://github.com/user-attachments/assets/83ca7c81-cc37-4f78-994d-0d9d48e08c24" /> <img width="1332" height="1910" alt="image" src="https://github.com/user-attachments/assets/6848004b-f49c-40ff-a46b-0cca9efa2354" />
+
 
 ### Technical Highlights
 - **GraphQL API** with type-safe schema and comprehensive resolvers
